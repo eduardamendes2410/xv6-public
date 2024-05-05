@@ -49,8 +49,18 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+
+  //Variaveis para a realização de testes
+  int preemption_time;
+  uint ctime; // Tempo quando o processo foi criado
+  int stime; //Tempo SLEEPING
+  int retime; //Tempo READY (RUNNABLE) time (que ele ta esperando na fila)
+  int rutime; // Tempo executando (RUNNING)
+  int lastruntime;
+  int priority; //Prioridade relacionada a fila de processos - vai de 1 a 4
 };
 
+void update_process_time();
 // Process memory is laid out contiguously, low addresses first:
 //   text
 //   original data and bss

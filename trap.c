@@ -9,13 +9,20 @@
 #include "spinlock.h"
 
 // Interrupt descriptor table (shared by all CPUs).
-struct gatedesc idt[256];
+struct gatedesc idt[256]; // CADA ELEMENEOT descreve uma entrada na tabela de descritores de interrupção.
 extern uint vectors[];  // in vectors.S: array of 256 entry pointers
-struct spinlock tickslock;
-uint ticks;
+struct spinlock tickslock; // usada para sincronização no contador de ticks do sistema.
+uint ticks; //será usada para contar o número de ticks do sistema.
+
+//ticks
+//são a unidade básica de medição do tempo decorrido pelo sistema operacional. Cada "tick" representa um pequeno intervalo de tempo, 
+//geralmente determinado pelo relógio do sistema.
+//em escalonadores os "ticks" são usados para agendar a troca de contexto entre diferentes processos. O escalonador do sistema decide
+// quando um processo deve ser interrompido e outro deve ser executado com base em contagens de "ticks".
+
 
 void
-tvinit(void)
+tvinit(void) // inicializa a tabela de vetores de interrupção.
 {
   int i;
 
@@ -27,16 +34,17 @@ tvinit(void)
 }
 
 void
-idtinit(void)
+idtinit(void) // que inicializa a tabela de descritores de interrupção.
 {
   lidt(idt, sizeof(idt));
 }
 
 //PAGEBREAK: 41
+//ESSE CODIGO SERVE PRA TRATAR INTERRUPÇÕES (TRAPS) NO SISTEMA
 void
-trap(struct trapframe *tf)
+trap(struct trapframe *tf) //ESSE TRAPFRAME contém o estado das registradores no momento em que a interrupção ou exceção ocorreu.
 {
-  if(tf->trapno == T_SYSCALL){
+  if(tf->trapno == T_SYSCALL){ //VERIFICA SE A INTERRUPÇÃO OCORREU DEVIDO A UMA CHAMADA DE SISTEMA
     if(myproc()->killed)
       exit();
     myproc()->tf = tf;
@@ -46,16 +54,18 @@ trap(struct trapframe *tf)
     return;
   }
 
-  switch(tf->trapno){
+  switch(tf->trapno){ //. Esta parte é responsável por atualizar o contador de ticks (ticks) do sistema, acordar processos que estavam dormindo aguardando ticks e liberar o tickslock.
   case T_IRQ0 + IRQ_TIMER:
     if(cpuid() == 0){
       acquire(&tickslock);
       ticks++;
+      update_process_time();
       wakeup(&ticks);
       release(&tickslock);
     }
     lapiceoi();
     break;
+    //Trata interrupções específicas de dispositivos, como o disco IDE, teclado, porta serial, etc.
   case T_IRQ0 + IRQ_IDE:
     ideintr();
     lapiceoi();
@@ -71,7 +81,7 @@ trap(struct trapframe *tf)
     uartintr();
     lapiceoi();
     break;
-  case T_IRQ0 + 7:
+  case T_IRQ0 + 7: // Lida com interrupções inesperadas.
   case T_IRQ0 + IRQ_SPURIOUS:
     cprintf("cpu%d: spurious interrupt at %x:%x\n",
             cpuid(), tf->cs, tf->eip);
@@ -103,7 +113,8 @@ trap(struct trapframe *tf)
   // Force process to give up CPU on clock tick.
   // If interrupts were on while locks held, would need to check nlock.
   if(myproc() && myproc()->state == RUNNING &&
-     tf->trapno == T_IRQ0+IRQ_TIMER)
+     tf->trapno == T_IRQ0+IRQ_TIMER && 
+     myproc()->preemption_time==INTERV)
     yield();
 
   // Check if the process has been killed since we yielded
