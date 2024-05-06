@@ -50,6 +50,14 @@ int sys_yield(void){
 }
 
 int
+sys_getprio(void) {
+    if (myproc() == 0) 
+        return -1;
+    cprintf("Pid:%d, Priority:%d\n", myproc()->pid, myproc()->priority);
+    return 0;
+}
+
+int
 sys_kill(void)
 {
   int pid;

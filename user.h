@@ -25,7 +25,8 @@ int sleep(int);
 int uptime(void);
 int wait2(int*, int*, int*); //TESTE
 void yield(void);
-int change_prio(int);
+int change_prio(int, int);
+int getprio(void);
 
 
 // ulib.c

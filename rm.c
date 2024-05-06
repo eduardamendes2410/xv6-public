@@ -5,7 +5,7 @@
 int
 main(int argc, char *argv[])
 {
-  int i;VDSV C
+  int i;
 
   if(argc < 2){
     printf(2, "Usage: rm files...\n");

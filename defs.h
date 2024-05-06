@@ -123,6 +123,8 @@ void            yield(void);
 int             wait2(int*, int*, int*); //TESTE
 void            update_process_time(void);
 int             change_prio(int, int);
+void            starvation(void);
+void            getprio(void);
 
 // swtch.S
 void            swtch(struct context**, struct context*);

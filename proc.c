@@ -11,6 +11,8 @@
 struct { //1 o spinlock ta bloqueado e 0 nao
   struct spinlock lock; //Spinlock é um mecanismo de sincronização para garantir que apenas um thread (ou processo) tenha acesso exclusivo a um recurso compartilhado por vez
   struct proc proc[NPROC]; //NPROC define o número máximo de processos que o sistema pode lidar.
+  struct proc* queue[5][NPROC]; //filas de processos
+  int count_process_queue[5];
 } ptable;
 
 static struct proc *initproc;
@@ -25,6 +27,11 @@ void
 pinit(void)
 {
   initlock(&ptable.lock, "ptable"); //inicializa o spinlock ptable.lock para garantir que a tabela de processos seja acessada de forma segura por várias partes do sistema. 
+  ptable.count_process_queue[0] = -1; //fila invalida
+  ptable.count_process_queue[1] = 0;
+  ptable.count_process_queue[2] = 0;
+  ptable.count_process_queue[3] = 0;
+  ptable.count_process_queue[4] = 0;
 }
 
 // Must be called with interrupts disabled = Deve ser chamado com interrupções desabilitadas
@@ -182,6 +189,8 @@ userinit(void)
   acquire(&ptable.lock);
 
   p->state = RUNNABLE;
+  ptable.count_process_queue[2]++;
+  ptable.queue[2][ptable.count_process_queue[2]] = p;
 
   release(&ptable.lock);
 }
@@ -260,7 +269,8 @@ fork(void)
   acquire(&ptable.lock);
 
   np->state = RUNNABLE; //SETA ELE PRA PRONTO PRA EXECUTAR
-
+  ptable.count_process_queue[2]++;
+  ptable.queue[2][ptable.count_process_queue[2]] = np;
   release(&ptable.lock);
 
   return pid;
@@ -434,10 +444,34 @@ int wait2(int* retime, int* rutime, int* stime){
 // - switch para iniciar a execução desse processo
 // - eventualmente esse processo transfere o controle
 // via switch de volta ao agendador.
+
+//ANA:
+
+  //   int priority;
+  //     for(priority = 4; priority >= 1; priority--) {
+  //         while(ptable.count_process_queue[priority] > 0) {
+  //             proc = ptable.queue[priority][0];
+  //             for (int i = 0; i < ptable.count_process_queue[priority]; i++) {
+  //                 ptable.queue[priority][i] = ptable.queue[priority][i + 1];
+  //             }
+  //             ptable.count_process_queue[priority]--;
+  //             switchuvm(proc);
+  //             proc->state = RUNNING;
+  //             swtch(&c->scheduler, proc->context);
+  //             switchkvm();
+  //             proc = 0;
+  //             priority = 0;
+  //   }
+  // }
+
+
+
+
 void
 scheduler(void)
 {
   struct proc *p; //processo atual
+  // struct proc *proc;
   struct cpu *c = mycpu(); //cpu atual
   c->proc = 0; //indica que na CPU nao tem nenhum processo em execução
   
@@ -445,15 +479,19 @@ scheduler(void)
     // Enable interrupts on this processor.
     sti(); //habilita interrupções neste processador.
 
+    //ESSA PRIMEIRA PARTE (ACIMA DO FOR) SO É EXECUTADA 1 VEZ, QUANDO O PROCESSADOR 
+    //É INICIADO, CASO CONTRARIO ELA SEMPRE SERÁ INICIADA DENTRO DO LOOP E VAI INICIAR NA LINHA
+    //switchkvm(); PORQUE AI ELE VAI DEVOLVER O CONTROLE PRO PROCESSO E VAI ENTRAR NOVAMENTE NO LOOP PRA PEGAR OUTRO PROCESSO
+
     // Loop over process table looking for process to run.
     acquire(&ptable.lock); //bloqueia a gtabela de processos
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){ //busca processos que estao prontos pra ser exevutados
       if(p->state != RUNNABLE)
         continue;
 
-      // Switch to chosen process.  It is the process's job
-      // to release ptable.lock and then reacquire it
-      // before jumping back to us.
+      // // Switch to chosen process.  It is the process's job
+      // // to release ptable.lock and then reacquire it
+      // // before jumping back to us.
       p->preemption_time=0;
       c->proc = p; //define o processo escolhido como o processo que vai executar agora
       switchuvm(p); //muda o contexto de PAGINAÇÃO (QUE PORRA É ESSE) PARA O PROCESSO
@@ -465,8 +503,8 @@ scheduler(void)
       // Process is done running for now.
       // It should have changed its p->state before coming back.
       c->proc = 0; //Limpa o processo atual da CPU, indicando que nenhum processo está atualmente em execução.
-    }
-    release(&ptable.lock);
+}
+  release(&ptable.lock);
 
   }
 }
@@ -495,7 +533,7 @@ sched(void)
   if(readeflags()&FL_IF)
     panic("sched interruptible");
   intena = mycpu()->intena;
-  swtch(&p->context, mycpu()->scheduler);
+  swtch(&p->context, mycpu()->scheduler); //PASSA O CONTROLE QUE ERA DO PROCESSO PARA O ESCALONADOR E CHAMA A FUNÇÃO SCHEDULER EM PROC.C
   mycpu()->intena = intena;
 }
 
@@ -504,7 +542,13 @@ sched(void)
 void
 yield(void)
 {
+  struct proc *p = myproc();
   acquire(&ptable.lock);  //DOC: yieldlock
+   if(p->priority >= 1 )
+    p->priority--;
+  
+  ptable.count_process_queue[p->priority]--;
+  ptable.queue[p->priority][ptable.count_process_queue[p->priority]] = p;
   myproc()->state = RUNNABLE;
   sched();
   release(&ptable.lock);
@@ -584,8 +628,11 @@ wakeup1(void *chan)
   struct proc *p;
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->state == SLEEPING && p->chan == chan)
+    if(p->state == SLEEPING && p->chan == chan){
+      ptable.count_process_queue[p->priority]--;
+      ptable.queue[p->priority][ptable.count_process_queue[p->priority]] = p;
       p->state = RUNNABLE;
+    }
 }
 
 // Wake up all processes sleeping on chan.
@@ -610,8 +657,11 @@ kill(int pid)
     if(p->pid == pid){
       p->killed = 1;
       // Wake process from sleep if necessary.
-      if(p->state == SLEEPING)
-        p->state = RUNNABLE;
+      if(p->state == SLEEPING){
+          ptable.count_process_queue[p->priority]--;
+          ptable.queue[p->priority][ptable.count_process_queue[p->priority]] = p;
+          p->state = RUNNABLE;
+      }
       release(&ptable.lock);
       return 0;
     }
@@ -707,4 +757,24 @@ int change_prio(int pid, int priority){
     }
     release(&ptable.lock);
     return pid;
+}
+
+// Realiza politica de inanição.
+void starvation(void)
+{
+  struct proc *p;
+
+  for (p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+  {
+    if (p->priority == 1 && p->retime > TO2)
+    {
+        p->priority = 2;
+    }
+    else if (p->priority == 2 && p->retime > TO3){
+        p->priority = 3;
+    }
+    else if (p->priority == 3 && p->retime > TO4 ){
+        p->priority = 4;
+    }
+  }
 }

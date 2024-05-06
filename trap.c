@@ -60,6 +60,7 @@ trap(struct trapframe *tf) //ESSE TRAPFRAME contém o estado das registradores n
       acquire(&tickslock);
       ticks++;
       update_process_time();
+      starvation();
       wakeup(&ticks);
       release(&tickslock);
     }
