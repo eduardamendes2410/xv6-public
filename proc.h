@@ -49,7 +49,21 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+
+  //Implementação TP -> Variaveis para a realização de testes
+  int preemption_time; //é o tempo que vai correndo ate dar o valor do INTERV, ou seja, o processo vai executar ate preemption_time == INTERV
+  uint ctime; // Tempo quando o processo foi criado
+  int stime; //Tempo SLEEPING
+  int retime; //Tempo READY (RUNNABLE) time (que ele ta esperando na fila)
+  int rutime; // Tempo executando (RUNNING)
+  int aging; // Variavel usada para evitar inanição dos processos
+  int priority; //Prioridade relacionada a fila de processos (1 a 4)
+  int burst_time;
+  int estimate_burst_time_;
+  int vruntime; // vruntime do CFS
 };
+
+void update_process_time();
 
 // Process memory is laid out contiguously, low addresses first:
 //   text

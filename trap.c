@@ -47,10 +47,15 @@ trap(struct trapframe *tf)
   }
 
   switch(tf->trapno){
-  case T_IRQ0 + IRQ_TIMER:
+  case T_IRQ0 + IRQ_TIMER: //acontece o tempo todo, toda hora chama essa função
     if(cpuid() == 0){
       acquire(&tickslock);
       ticks++;
+
+      //Implementação TP
+      update_process_time();
+      aging_mechanism();
+
       wakeup(&ticks);
       release(&tickslock);
     }
@@ -102,9 +107,20 @@ trap(struct trapframe *tf)
 
   // Force process to give up CPU on clock tick.
   // If interrupts were on while locks held, would need to check nlock.
+  // if(myproc() && myproc()->state == RUNNING &&
+  //    tf->trapno == T_IRQ0+IRQ_TIMER && myproc()->preemption_time==INTERV && myproc()->priority == 3) //Implementação TP
+  //   yield();
+
+  //Chama o yield se for o RR ou o CFS
   if(myproc() && myproc()->state == RUNNING &&
-     tf->trapno == T_IRQ0+IRQ_TIMER)
-    yield();
+    tf->trapno == T_IRQ0+IRQ_TIMER && myproc()->preemption_time==INTERV && (myproc()->priority == 3 || myproc()->priority == 2)) //Implementação TP
+    {
+      if (myproc()->priority == 2)
+      {
+        myproc()->vruntime += INTERV;
+      }
+      yield();
+    }
 
   // Check if the process has been killed since we yielded
   if(myproc() && myproc()->killed && (tf->cs&3) == DPL_USER)

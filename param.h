@@ -12,3 +12,9 @@
 #define NBUF         (MAXOPBLOCKS*3)  // size of disk block cache
 #define FSSIZE       1000  // size of file system in blocks
 
+//Implementação TP
+#define INTERV       5
+#define TO1          100
+#define TO2          70
+#define TO3          50
+#define ALPHA        0.5

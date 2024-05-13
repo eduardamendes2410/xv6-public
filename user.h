@@ -24,6 +24,11 @@ char* sbrk(int);
 int sleep(int);
 int uptime(void);
 
+//Implementação TP
+int wait2(int*, int*, int*);
+void yield(void);
+int change_prio(int);
+
 // ulib.c
 int stat(const char*, struct stat*);
 char* strcpy(char*, const char*);
