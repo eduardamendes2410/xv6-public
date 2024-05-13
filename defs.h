@@ -121,6 +121,12 @@ int             wait(void);
 void            wakeup(void*);
 void            yield(void);
 
+//Implementação TP
+int             wait2(int*, int*, int*);
+void            update_process_time(void);
+int             change_prio(int);
+void            aging_mechanism(void);
+
 // swtch.S
 void            swtch(struct context**, struct context*);
 
